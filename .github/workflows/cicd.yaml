@@ -81,12 +81,21 @@ jobs:
           echo "version=${LATEST_GO_VERSION}" >> $GITHUB_OUTPUT
           
       # Step 5: Get latest Python patch version
-      # Fetches the latest patch for the selected Python minor version
+      # Fetches the latest patch for the selected Python minor version, ignoring pre-releases
       - name: Get latest Python patch version
         id: get_python_version
         run: |
+          set -eo pipefail
           MINOR_VERSION=${{ github.event.inputs.python_version_minor || '3.12' }}
-          LATEST_PYTHON_VERSION=$(curl -s -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/python/cpython/tags | jq -r --arg V "v${MINOR_VERSION}." '[.[] | .name | select(startswith($V))] | sort_by(split(".") | map(tonumber)) | .[-1] | ltrimstr("v")')
+          echo "Fetching latest patch for Python ${MINOR_VERSION}..."
+          LATEST_PYTHON_VERSION=$(curl -s -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/python/cpython/tags | jq -r --arg V "v${MINOR_VERSION}." '[.[] | .name | select(startswith($V) and (test("rc|a|b") | not))] | sort_by(split(".") | map(tonumber)) | .[-1] | ltrimstr("v")')
+          
+          if [ -z "$LATEST_PYTHON_VERSION" ]; then
+            echo "::error::Could not determine latest Python version for ${MINOR_VERSION}."
+            exit 1
+          fi
+          
+          echo "Found latest Python version: ${LATEST_PYTHON_VERSION}"
           echo "version=${LATEST_PYTHON_VERSION}" >> $GITHUB_OUTPUT
 
       # Step 6: Get latest Node.js version
