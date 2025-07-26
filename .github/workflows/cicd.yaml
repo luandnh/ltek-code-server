@@ -1,11 +1,41 @@
 # Workflow name displayed in the GitHub Actions tab
 name: Build and Push Docker Image
 
-# Trigger this workflow on a push to any tag starting with 'v'
+# Trigger this workflow on a push to any tag starting with 'v' OR manually
 on:
   push:
     tags:
       - 'v*' # e.g., v1.0, v2.1.3
+  workflow_dispatch:
+    # Inputs for manual workflow runs
+    inputs:
+      code_release:
+        description: 'Code Server Version'
+        required: true
+        default: '4.102.2'
+      go_version:
+        description: 'Go Version (leave empty to use latest stable)'
+        required: false
+        default: ''
+      node_version_major:
+        description: 'Node.js Major Version'
+        required: true
+        type: choice
+        options:
+        - '22' # Current
+        - '20' # LTS
+        - '18' # LTS
+        default: '20'
+      python_version_minor:
+        description: 'Python Minor Version'
+        required: true
+        type: choice
+        options:
+        - '3.12'
+        - '3.11'
+        - '3.10'
+        - '3.9'
+        default: '3.12'
 
 # Environment variables available to all jobs in this workflow
 env:
@@ -41,12 +71,39 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=true
 
-      # Step 4: Set up Docker Buildx
+      # Step 4: Get latest Go version
+      # Fetches the latest stable Go version if no specific version is provided as input
+      - name: Get latest Go version
+        id: get_go_version
+        if: github.event.inputs.go_version == ''
+        run: |
+          LATEST_GO_VERSION=$(curl -s "https://go.dev/dl/?mode=json" | jq -r '.[0].version' | sed 's/go//')
+          echo "version=${LATEST_GO_VERSION}" >> $GITHUB_OUTPUT
+          
+      # Step 5: Get latest Python patch version
+      # Fetches the latest patch for the selected Python minor version
+      - name: Get latest Python patch version
+        id: get_python_version
+        run: |
+          MINOR_VERSION=${{ github.event.inputs.python_version_minor || '3.12' }}
+          LATEST_PYTHON_VERSION=$(curl -s -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/python/cpython/tags | jq -r --arg V "v${MINOR_VERSION}." '[.[] | .name | select(startswith($V))] | sort_by(split(".") | map(tonumber)) | .[-1] | ltrimstr("v")')
+          echo "version=${LATEST_PYTHON_VERSION}" >> $GITHUB_OUTPUT
+
+      # Step 6: Get latest Node.js version
+      # Fetches the latest patch for the selected Node.js major version
+      - name: Get latest Node.js version
+        id: get_node_version
+        run: |
+          MAJOR_VERSION=${{ github.event.inputs.node_version_major || '20' }}
+          LATEST_NODE_VERSION=$(curl -s https://nodejs.org/dist/index.json | jq -r --arg V "v${MAJOR_VERSION}." '[.[] | select(.version | startswith($V))] | .[0].version | ltrimstr("v")')
+          echo "version=${LATEST_NODE_VERSION}" >> $GITHUB_OUTPUT
+
+      # Step 7: Set up Docker Buildx
       # A Docker CLI plugin for building multi-platform images
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Step 5: Build and push the Docker image
+      # Step 8: Build and push the Docker image
       # Uses the extracted metadata and passes build arguments to the Dockerfile
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -57,8 +114,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
-            CODE_RELEASE=${{ steps.meta.outputs.version }}
             BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-            GO_VERSION=1.22.5
-            NODE_VERSION=20.15.1
-            PYTHON_VERSION=3.12.4
+            CODE_RELEASE=${{ github.event.inputs.code_release || '4.102.2' }}
+            GO_VERSION=${{ github.event.inputs.go_version || steps.get_go_version.outputs.version }}
+            NODE_VERSION=${{ steps.get_node_version.outputs.version }}
+            PYTHON_VERSION=${{ steps.get_python_version.outputs.version }}
