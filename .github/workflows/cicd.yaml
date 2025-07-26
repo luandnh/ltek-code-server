@@ -1,0 +1,64 @@
+# Workflow name displayed in the GitHub Actions tab
+name: Build and Push Docker Image
+
+# Trigger this workflow on a push to any tag starting with 'v'
+on:
+  push:
+    tags:
+      - 'v*' # e.g., v1.0, v2.1.3
+
+# Environment variables available to all jobs in this workflow
+env:
+  # Docker Hub image name. Replace with your own.
+  DOCKER_IMAGE: luandnh1998/ltek-code-server
+
+jobs:
+  build-and-push:
+    # Run this job on the latest Ubuntu runner
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the repository's code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Log in to Docker Hub
+      # Use secrets for secure authentication
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Step 3: Extract Docker metadata (tags and labels)
+      # Automatically creates smart tags from the Git tag
+      - name: Extract Metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=true
+
+      # Step 4: Set up Docker Buildx
+      # A Docker CLI plugin for building multi-platform images
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Step 5: Build and push the Docker image
+      # Uses the extracted metadata and passes build arguments to the Dockerfile
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            CODE_RELEASE=${{ steps.meta.outputs.version }}
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            GO_VERSION=1.22.5
+            NODE_VERSION=20.15.1
+            PYTHON_VERSION=3.12.4
