@@ -123,10 +123,10 @@ RUN \
 EXPOSE 8443
 
 # Define volumes for persistent data and configuration
-VOLUME ["/config", "/data"]
+VOLUME ["/config", "/data", "/workspaces"]
 
 # Default command to start the container
 # This starts code-server and sets the default shell to zsh if it's launched
 # WARNING: --auth none is insecure for public access.
 # Use `/data` as the default workspace in code-server.
-CMD ["/bin/zsh", "-c", "/app/code-server/bin/code-server --bind-addr 0.0.0.0:8443 --auth password /data"]
+CMD ["/bin/zsh", "-c", "/app/code-server/bin/code-server --bind-addr 0.0.0.0:8443 --auth password /workspaces"]

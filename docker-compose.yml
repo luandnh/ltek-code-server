@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  code-server:
+    image: luandnh1998/ltek-code-server:latest
+    container_name: code-server
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Ho_Chi_Minh
+      - PASSWORD=${PASSWORD}
+      - SUDO_PASSWORD=${SUDO_PASSWORD}
+      - DEFAULT_WORKSPACE=/config/workspace
+      - PWA_APPNAME=code-server
+    volumes:
+      - ./config:/config
+      - ./workspaces:/workspaces
+    networks:
+      - proxy
+    ports:
+      - 8443:8443
+
+networks:
+  proxy:
+    external: true
