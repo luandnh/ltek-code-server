@@ -80,18 +80,24 @@ jobs:
           LATEST_GO_VERSION=$(curl -s "https://go.dev/dl/?mode=json" | jq -r '.[0].version' | sed 's/go//')
           echo "version=${LATEST_GO_VERSION}" >> $GITHUB_OUTPUT
           
-      # Step 5: Get latest Python patch version
-      # Fetches the latest patch for the selected Python minor version, ignoring pre-releases
+      # Step 5: Get latest Python patch version using pyenv
+      # Installs pyenv and uses it to find the latest stable patch for the selected minor version
       - name: Get latest Python patch version
         id: get_python_version
         run: |
           set -eo pipefail
-          MINOR_VERSION=${{ github.event.inputs.python_version_minor || '3.12' }}
-          echo "Fetching latest patch for Python ${MINOR_VERSION}..."
-          LATEST_PYTHON_VERSION=$(curl -s -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/python/cpython/tags | jq -r --arg V "v${MINOR_VERSION}." '[.[] | .name | select(startswith($V) and (test("rc|a|b") | not))] | sort_by(split(".") | map(tonumber)) | .[-1] | ltrimstr("v")')
+          git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+          export PYENV_ROOT="$HOME/.pyenv"
+          export PATH="$PYENV_ROOT/bin:$PATH"
           
+            =${{ github.event.inputs.python_version_minor || '3.12' }}
+          echo "Fetching latest patch for Python ${MINOR_VERSION} using pyenv..."
+          
+          # List all versions, filter by minor, exclude dev/pre-releases, get the latest stable one
+          LATEST_PYTHON_VERSION=$(pyenv install --list | grep -E "^\s*${MINOR_VERSION}\.[0-9]+$" | tail -n 1 | tr -d '[:space:]')
+
           if [ -z "$LATEST_PYTHON_VERSION" ]; then
-            echo "::error::Could not determine latest Python version for ${MINOR_VERSION}."
+            echo "::error::Could not determine latest Python version for ${MINOR_VERSION} using pyenv."
             exit 1
           fi
           
